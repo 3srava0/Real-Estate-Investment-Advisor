@@ -22,24 +22,29 @@ class FeatureEngineer:
     def create_numerical_features(self) -> None:
         """Create new numerical features"""
         logger.info("\n📊 Creating numerical features...")
-        
-        # Price per square foot
+    
+    # Convert to numeric, handling any non-numeric values
+        self.df['Nearby_Schools'] = pd.to_numeric(self.df['Nearby_Schools'], errors='coerce').fillna(0)
+        self.df['Nearby_Hospitals'] = pd.to_numeric(self.df['Nearby_Hospitals'], errors='coerce').fillna(0)
+        self.df['Public_Transport_Accessibility'] = pd.to_numeric(self.df['Public_Transport_Accessibility'], errors='coerce').fillna(0)
+    
+    # Price per square foot
         self.df['Price_per_SqFt'] = self.df['Price_in_Lakhs'] / (self.df['Size_in_SqFt'] + 1)
         logger.info("  ✓ Price_per_SqFt created")
-        
-        # Infrastructure score (normalized combination)
+    
+    # Infrastructure score (normalized combination)
         self.df['Infrastructure_Score'] = (
-            self.df['Nearby_Schools'] + 
-            self.df['Nearby_Hospitals'] + 
-            self.df['Public_Transport_Accessibility']
-        ) / 3
+        self.df['Nearby_Schools'] + 
+        self.df['Nearby_Hospitals'] + 
+        self.df['Public_Transport_Accessibility']
+    ) / 3
         logger.info("  ✓ Infrastructure_Score created")
-        
-        # Property age
+    
+    # Property age
         current_year = 2024
         self.df['Property_Age'] = current_year - self.df['Year_Built']
         logger.info("  ✓ Property_Age created")
-        
+    
         # Amenities count
         self.df['Amenities_Count'] = self.df['Amenities'].fillna('').str.split(',').apply(len)
         logger.info("  ✓ Amenities_Count created")
@@ -47,10 +52,11 @@ class FeatureEngineer:
         # Price-to-size ratio
         self.df['Price_to_BHK'] = self.df['Price_in_Lakhs'] / (self.df['BHK'] + 1)
         logger.info("  ✓ Price_to_BHK created")
-        
-        # Total floor advantage (high floor preference in India)
+    
+        # Total floor advantage
         self.df['Floor_Advantage'] = self.df['Floor_No'] / (self.df['Total_Floors'] + 1)
         logger.info("  ✓ Floor_Advantage created")
+
     
     def create_categorical_features(self) -> None:
         """Create binary categorical features"""
@@ -129,18 +135,25 @@ class FeatureEngineer:
     def scale_numerical_features(self) -> None:
         """Scale numerical features"""
         logger.info("\n📈 Scaling numerical features...")
-        
-        numerical_cols = [
-            'Price_in_Lakhs', 'Size_in_SqFt', 'BHK', 'Year_Built',
-            'Floor_No', 'Total_Floors', 'Nearby_Schools', 'Nearby_Hospitals',
-            'Public_Transport_Accessibility', 'Parking_Space',
-            'Price_per_SqFt', 'Infrastructure_Score', 'Property_Age',
-            'Price_to_BHK', 'Floor_Advantage'
-        ]
-        
-        available_cols = [col for col in numerical_cols if col in self.df.columns]
+    
+        numerical_cols = ['Price_in_Lakhs', 'Size_in_SqFt', 'BHK', 'Year_Built',
+        'Floor_No', 'Total_Floors', 'Nearby_Schools', 'Nearby_Hospitals',
+        'Public_Transport_Accessibility', 'Parking_Space',
+        'Price_per_SqFt', 'Infrastructure_Score', 'Property_Age',
+        'Price_to_BHK', 'Floor_Advantage']
+    
+    # Get columns that exist and convert all to numeric
+        available_cols = []
+        for col in numerical_cols:
+            if col in self.df.columns:
+                self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
+                self.df[col].fillna(self.df[col].median(), inplace=True)
+                available_cols.append(col)
+    
+    # Now scale
         self.df[available_cols] = self.scaler.fit_transform(self.df[available_cols])
         logger.info(f"  ✓ Scaled {len(available_cols)} numerical features")
+
     
     def get_feature_summary(self) -> Dict:
         """Generate feature engineering summary"""

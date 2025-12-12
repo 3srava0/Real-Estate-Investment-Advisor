@@ -91,30 +91,67 @@ class EDA:
     def multivariate_analysis(self):
         """Analyze complex patterns"""
         logger.info("\n📊 Multivariate Analysis...")
-        
+    
         # Good Investment by features
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        
-        self.df.groupby('Is_Luxury')['Good_Investment'].mean().plot(kind='bar', ax=axes[0, 0], color=['coral', 'green'])
-        axes[0, 0].set_title('Good Investment % by Luxury Status')
-        axes[0, 0].set_xticklabels(['Not Luxury', 'Luxury'], rotation=0)
-        axes[0, 0].set_ylabel('Proportion Good')
-        
-        self.df.groupby('Is_Well_Connected')['Good_Investment'].mean().plot(kind='bar', ax=axes[0, 1], color=['coral', 'green'])
-        axes[0, 1].set_title('Good Investment % by Connectivity')
-        axes[0, 1].set_xticklabels(['Not Connected', 'Connected'], rotation=0)
-        axes[0, 1].set_ylabel('Proportion Good')
-        
-        self.df.groupby('Is_Premium_Area')['Good_Investment'].mean().plot(kind='bar', ax=axes[1, 0], color=['coral', 'green'])
-        axes[1, 0].set_title('Good Investment % by Premium Area')
-        axes[1, 0].set_xticklabels(['Not Premium', 'Premium'], rotation=0)
-        axes[1, 0].set_ylabel('Proportion Good')
-        
-        self.df.groupby('Is_Secure')['Good_Investment'].mean().plot(kind='bar', ax=axes[1, 1], color=['coral', 'green'])
-        axes[1, 1].set_title('Good Investment % by Security')
-        axes[1, 1].set_xticklabels(['Not Secure', 'Secure'], rotation=0)
-        axes[1, 1].set_ylabel('Proportion Good')
-        
+    
+        # Fix 1: Check if feature has both 0 and 1 values before plotting
+        try:
+            data1 = self.df.groupby('Is_Luxury')['Good_Investment'].mean()
+            if len(data1) > 1:
+                data1.plot(kind='bar', ax=axes[0, 0], color=['coral', 'green'])
+                axes[0, 0].set_xticklabels(['Not Luxury', 'Luxury'], rotation=0)
+            else:
+                axes[0, 0].bar(range(len(data1)), data1.values, color='coral')
+                axes[0, 0].set_xticks(range(len(data1)))
+                axes[0, 0].set_xticklabels(data1.index, rotation=0)
+            axes[0, 0].set_title('Good Investment % by Luxury Status')
+            axes[0, 0].set_ylabel('Proportion Good')
+        except Exception as e:
+            logger.warning(f"  ⚠ Skipping Luxury plot: {e}")
+    
+        try:
+            data2 = self.df.groupby('Is_Well_Connected')['Good_Investment'].mean()
+            if len(data2) > 1:
+                data2.plot(kind='bar', ax=axes[0, 1], color=['coral', 'green'])
+                axes[0, 1].set_xticklabels(['Not Connected', 'Connected'], rotation=0)
+            else:
+                axes[0, 1].bar(range(len(data2)), data2.values, color='coral')
+                axes[0, 1].set_xticks(range(len(data2)))
+                axes[0, 1].set_xticklabels(data2.index, rotation=0)
+            axes[0, 1].set_title('Good Investment % by Connectivity')
+            axes[0, 1].set_ylabel('Proportion Good')
+        except Exception as e:
+            logger.warning(f"  ⚠ Skipping Connected plot: {e}")
+    
+        try:
+            data3 = self.df.groupby('Is_Premium_Area')['Good_Investment'].mean()
+            if len(data3) > 1:
+                data3.plot(kind='bar', ax=axes[1, 0], color=['coral', 'green'])
+                axes[1, 0].set_xticklabels(['Not Premium', 'Premium'], rotation=0)
+            else:
+                axes[1, 0].bar(range(len(data3)), data3.values, color='coral')
+                axes[1, 0].set_xticks(range(len(data3)))
+                axes[1, 0].set_xticklabels(data3.index, rotation=0)
+            axes[1, 0].set_title('Good Investment % by Premium Area')
+            axes[1, 0].set_ylabel('Proportion Good')
+        except Exception as e:
+            logger.warning(f"  ⚠ Skipping Premium plot: {e}")
+    
+        try:
+            data4 = self.df.groupby('Is_Secure')['Good_Investment'].mean()
+            if len(data4) > 1:
+                data4.plot(kind='bar', ax=axes[1, 1], color=['coral', 'green'])
+                axes[1, 1].set_xticklabels(['Not Secure', 'Secure'], rotation=0)
+            else:
+                axes[1, 1].bar(range(len(data4)), data4.values, color='coral')
+                axes[1, 1].set_xticks(range(len(data4)))
+                axes[1, 1].set_xticklabels(data4.index, rotation=0)
+            axes[1, 1].set_title('Good Investment % by Security')
+            axes[1, 1].set_ylabel('Proportion Good')
+        except Exception as e:
+            logger.warning(f"  ⚠ Skipping Security plot: {e}")
+    
         plt.tight_layout()
         plt.savefig(self.output_dir / '05_investment_by_features.png', dpi=100, bbox_inches='tight')
         logger.info("  ✓ Saved: 05_investment_by_features.png")
