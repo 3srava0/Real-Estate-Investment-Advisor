@@ -53,6 +53,10 @@ class ClassificationModels:
         
         # Separate features and target
         X = self.df.drop(['Good_Investment', 'Future_Price_5Y'], axis=1, errors='ignore')
+                
+        # Drop original categorical columns, keep only encoded versions
+        categorical_cols = ['State', 'City', 'Property_Type', 'Furnished_Status', 'Owner_Type', 'Availability_Status', 'Facing', 'Security']
+        X = X.drop(columns=[col for col in categorical_cols if col in X.columns], errors='ignore')
         y = self.df['Good_Investment']
         
         print(f"Features: {X.shape[1]}, Target classes: {y.nunique()}")
