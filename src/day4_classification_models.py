@@ -1,14 +1,14 @@
-"""Day 4: Classification Models Training and Evaluation
-
-Build and evaluate multiple classification models for predicting Good_Investment target.
-Includes Logistic Regression, Random Forest, XGBoost, and SVM.
+"""Day 4: Classification Models Training and Evaluation (IMPROVED)
+Build and evaluate multiple classification models with proper train/val/test split.
+Includes Logistic Regression, Random Forest, XGBoost, and SVM with hyperparameter tuning.
 """
-
 import numpy as np
 import pandas as pd
 import warnings
 import os
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+import pickle
+from pathlib import Path
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
@@ -20,8 +20,6 @@ from sklearn.metrics import (
 import matplotlib.pyplot as plt
 import seaborn as sns
 import xgboost as xgb
-import pickle
-from pathlib import Path
 
 warnings.filterwarnings('ignore')
 
@@ -31,14 +29,15 @@ Path('results').mkdir(exist_ok=True)
 Path('visualizations').mkdir(exist_ok=True)
 Path('output').mkdir(exist_ok=True)
 
-class ClassificationModels:
-    """Classification models trainer and evaluator"""
+class ClassificationModelsImproved:
+    """Classification models trainer with proper train/val/test split and hyperparameter tuning"""
     
     def __init__(self, data_path='output/data_engineered.csv'):
         self.data_path = data_path
         self.models = {}
         self.results = {}
         self.scaler = StandardScaler()
+        self.cv_results = {}
         
     def load_data(self):
         """Load engineered data"""
@@ -48,224 +47,244 @@ class ClassificationModels:
         return self.df
     
     def prepare_data(self):
-        """Prepare data for classification"""
-        print("\nPreparing data...")
+        """Prepare data with proper train/val/test split (60/15/25)"""
+        print("\n" + "="*70)
+        print("PREPARING DATA WITH TRAIN/VAL/TEST SPLIT")
+        print("="*70)
         
         # Separate features and target
         X = self.df.drop(['Good_Investment', 'Future_Price_5Y'], axis=1, errors='ignore')
-                
-        # Drop original categorical columns, keep only encoded versions
-        categorical_cols = ['State', 'City', 'Property_Type', 'Furnished_Status', 'Owner_Type', 'Availability_Status', 'Facing', 'Security']
+        
+        # Drop original categorical columns
+        categorical_cols = ['State', 'City', 'Property_Type', 'Furnished_Status', 
+                          'Owner_Type', 'Availability_Status', 'Facing', 'Security']
         X = X.drop(columns=[col for col in categorical_cols if col in X.columns], errors='ignore')
         y = self.df['Good_Investment']
         
         print(f"Features: {X.shape[1]}, Target classes: {y.nunique()}")
-        print(f"Class distribution:\n{y.value_counts()}")
+        print(f"\nClass distribution:\n{y.value_counts()}")
         
-        # Train-test split (stratified)
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
+        # IMPROVED: Proper train/val/test split (60% train, 15% val, 25% test)
+        # Step 1: Split into train (60%) and temp (40%)
+        self.X_train, X_temp, self.y_train, y_temp = train_test_split(
+            X, y, test_size=0.4, random_state=42, stratify=y
         )
         
-        # Feature scaling
+        # Step 2: Split temp into val (15%) and test (25%)
+        self.X_val, self.X_test, self.y_val, self.y_test = train_test_split(
+            X_temp, y_temp, test_size=0.667, random_state=42, stratify=y_temp
+        )
+        
+        total = len(X)
+        print(f"\n{'Dataset':<15} {'Samples':<15} {'Percentage':<15}")
+        print("-" * 45)
+        print(f"{'Train':<15} {self.X_train.shape[0]:<15} {self.X_train.shape[0]/total*100:>6.1f}%")
+        print(f"{'Validation':<15} {self.X_val.shape[0]:<15} {self.X_val.shape[0]/total*100:>6.1f}%")
+        print(f"{'Test':<15} {self.X_test.shape[0]:<15} {self.X_test.shape[0]/total*100:>6.1f}%")
+        
+        # Feature scaling (fit ONLY on training data to prevent leakage)
         self.X_train_scaled = self.scaler.fit_transform(self.X_train)
+        self.X_val_scaled = self.scaler.transform(self.X_val)
         self.X_test_scaled = self.scaler.transform(self.X_test)
         
-        print(f"Train set: {self.X_train_scaled.shape}")
-        print(f"Test set: {self.X_test_scaled.shape}")
+        print(f"\n✓ Features scaled (fit only on training data)")
         
     def train_logistic_regression(self):
-        """Train Logistic Regression"""
-        print("\nTraining Logistic Regression...")
-        model = LogisticRegression(C=1.0, max_iter=1000, solver='lbfgs', random_state=42)
-        model.fit(self.X_train_scaled, self.y_train)
-        self.models['Logistic Regression'] = model
+        """Train Logistic Regression with hyperparameter tuning"""
+        print("\n" + "="*70)
+        print("TRAINING LOGISTIC REGRESSION")
+        print("="*70)
         
-        # Cross-validation
-        skf = StratifiedKFold(n_splits=5)
-        cv_scores = cross_val_score(model, self.X_train_scaled, self.y_train, cv=skf, scoring='roc_auc')
-        print(f"CV ROC-AUC: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
+        # Hyperparameter tuning
+        param_grid = {
+            'C': [0.1, 1, 10],
+            'max_iter': [500, 1000],
+            'solver': ['lbfgs', 'liblinear']
+        }
+        
+        base_model = LogisticRegression(random_state=42, class_weight='balanced')
+        grid_search = GridSearchCV(base_model, param_grid, cv=5, scoring='roc_auc', n_jobs=-1)
+        
+        print(f"GridSearchCV with {len(param_grid['C']) * len(param_grid['max_iter']) * len(param_grid['solver'])} combinations...")
+        grid_search.fit(self.X_train_scaled, self.y_train)
+        
+        self.models['Logistic Regression'] = grid_search.best_estimator_
+        print(f"Best params: {grid_search.best_params_}")
+        print(f"Best CV ROC-AUC: {grid_search.best_score_:.4f}")
         
     def train_random_forest(self):
-        """Train Random Forest"""
-        print("\nTraining Random Forest...")
-        model = RandomForestClassifier(n_estimators=100, max_depth=10, min_samples_split=5, random_state=42, n_jobs=-1)
-        model.fit(self.X_train, self.y_train)
-        self.models['Random Forest'] = model
-        self.feature_importance_rf = model.feature_importances_
+        """Train Random Forest with hyperparameter tuning"""
+        print("\n" + "="*70)
+        print("TRAINING RANDOM FOREST")
+        print("="*70)
         
-        # Cross-validation
-        skf = StratifiedKFold(n_splits=5)
-        cv_scores = cross_val_score(model, self.X_train, self.y_train, cv=skf, scoring='roc_auc')
-        print(f"CV ROC-AUC: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
+        param_grid = {
+            'n_estimators': [50, 100],
+            'max_depth': [10, 15],
+            'min_samples_split': [5, 10]
+        }
+        
+        base_model = RandomForestClassifier(random_state=42, n_jobs=-1, class_weight='balanced')
+        grid_search = GridSearchCV(base_model, param_grid, cv=5, scoring='roc_auc', n_jobs=-1)
+        
+        print(f"GridSearchCV with {len(param_grid['n_estimators']) * len(param_grid['max_depth']) * len(param_grid['min_samples_split'])} combinations...")
+        grid_search.fit(self.X_train, self.y_train)
+        
+        self.models['Random Forest'] = grid_search.best_estimator_
+        print(f"Best params: {grid_search.best_params_}")
+        print(f"Best CV ROC-AUC: {grid_search.best_score_:.4f}")
         
     def train_xgboost(self):
-        """Train XGBoost"""
-        print("\nTraining XGBoost...")
-        model = xgb.XGBClassifier(n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42, eval_metric='logloss')
-        model.fit(self.X_train, self.y_train)
-        self.models['XGBoost'] = model
-        self.feature_importance_xgb = model.feature_importances_
+        """Train XGBoost with hyperparameter tuning"""
+        print("\n" + "="*70)
+        print("TRAINING XGBOOST")
+        print("="*70)
         
-        # Cross-validation
-        skf = StratifiedKFold(n_splits=5)
-        cv_scores = cross_val_score(model, self.X_train, self.y_train, cv=skf, scoring='roc_auc')
-        print(f"CV ROC-AUC: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
+        param_grid = {
+            'n_estimators': [50, 100],
+            'max_depth': [5, 7],
+            'learning_rate': [0.01, 0.1]
+        }
+        
+        base_model = xgb.XGBClassifier(random_state=42, eval_metric='logloss', scale_pos_weight=1)
+        grid_search = GridSearchCV(base_model, param_grid, cv=5, scoring='roc_auc', n_jobs=-1)
+        
+        print(f"GridSearchCV with {len(param_grid['n_estimators']) * len(param_grid['max_depth']) * len(param_grid['learning_rate'])} combinations...")
+        grid_search.fit(self.X_train, self.y_train)
+        
+        self.models['XGBoost'] = grid_search.best_estimator_
+        print(f"Best params: {grid_search.best_params_}")
+        print(f"Best CV ROC-AUC: {grid_search.best_score_:.4f}")
         
     def train_svm(self):
-        """Train SVM"""
-        print("\nTraining SVM...")
-        model = SVC(kernel='rbf', C=1.0, gamma='scale', probability=True, random_state=42)
-        model.fit(self.X_train_scaled, self.y_train)
-        self.models['SVM'] = model
+        """Train SVM with hyperparameter tuning"""
+        print("\n" + "="*70)
+        print("TRAINING SUPPORT VECTOR MACHINE")
+        print("="*70)
         
-        # Cross-validation
-        skf = StratifiedKFold(n_splits=5)
-        cv_scores = cross_val_score(model, self.X_train_scaled, self.y_train, cv=skf, scoring='roc_auc')
-        print(f"CV ROC-AUC: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
+        param_grid = {
+            'C': [0.1, 1, 10],
+            'gamma': ['scale', 'auto']
+        }
+        
+        base_model = SVC(kernel='rbf', probability=True, random_state=42)
+        grid_search = GridSearchCV(base_model, param_grid, cv=5, scoring='roc_auc', n_jobs=-1)
+        
+        print(f"GridSearchCV with {len(param_grid['C']) * len(param_grid['gamma'])} combinations...")
+        grid_search.fit(self.X_train_scaled, self.y_train)
+        
+        self.models['SVM'] = grid_search.best_estimator_
+        print(f"Best params: {grid_search.best_params_}")
+        print(f"Best CV ROC-AUC: {grid_search.best_score_:.4f}")
+        
+    def evaluate_on_set(self, model, X, y, set_name):
+        """Evaluate model on a specific dataset"""
+        if hasattr(model, 'predict_proba'):
+            y_pred = model.predict(X)
+            y_pred_proba = model.predict_proba(X)[:, 1]
+        else:
+            y_pred = model.predict(X)
+            y_pred_proba = model.decision_function(X)
+        
+        metrics = {
+            'Accuracy': accuracy_score(y, y_pred),
+            'Precision': precision_score(y, y_pred, zero_division=0),
+            'Recall': recall_score(y, y_pred, zero_division=0),
+            'F1-Score': f1_score(y, y_pred, zero_division=0),
+            'ROC-AUC': roc_auc_score(y, y_pred_proba),
+        }
+        
+        return metrics, y_pred, y_pred_proba
         
     def evaluate_models(self):
-        """Evaluate all models"""
-        print("\nEvaluating models...")
+        """Evaluate all models on train/val/test sets"""
+        print("\n" + "="*70)
+        print("EVALUATING MODELS")
+        print("="*70)
         
         for name, model in self.models.items():
-            # Get predictions
-            if name in ['Logistic Regression', 'SVM']:
-                y_pred = model.predict(self.X_test_scaled)
-                y_pred_proba = model.predict_proba(self.X_test_scaled)[:, 1]
+            print(f"\n{name}:")
+            print("-" * 50)
+            
+            # Use scaled data for LR and SVM, normal data for tree-based
+            use_scaled = name in ['Logistic Regression', 'SVM']
+            
+            if use_scaled:
+                X_train, X_val, X_test = self.X_train_scaled, self.X_val_scaled, self.X_test_scaled
             else:
-                y_pred = model.predict(self.X_test)
-                y_pred_proba = model.predict_proba(self.X_test)[:, 1]
+                X_train, X_val, X_test = self.X_train, self.X_val, self.X_test
             
-            # Calculate metrics
-            acc = accuracy_score(self.y_test, y_pred)
-            prec = precision_score(self.y_test, y_pred, zero_division=0)
-            rec = recall_score(self.y_test, y_pred, zero_division=0)
-            f1 = f1_score(self.y_test, y_pred, zero_division=0)
-            roc_auc = roc_auc_score(self.y_test, y_pred_proba)
+            # Evaluate on all three sets
+            train_metrics, train_pred, train_proba = self.evaluate_on_set(
+                model, X_train, self.y_train, "Train"
+            )
+            val_metrics, val_pred, val_proba = self.evaluate_on_set(
+                model, X_val, self.y_val, "Validation"
+            )
+            test_metrics, test_pred, test_proba = self.evaluate_on_set(
+                model, X_test, self.y_test, "Test"
+            )
             
+            # Store results
             self.results[name] = {
-                'Accuracy': acc,
-                'Precision': prec,
-                'Recall': rec,
-                'F1-Score': f1,
-                'ROC-AUC': roc_auc,
-                'y_pred': y_pred,
-                'y_pred_proba': y_pred_proba
+                'Train': {**train_metrics, 'y_pred': train_pred, 'y_pred_proba': train_proba},
+                'Val': {**val_metrics, 'y_pred': val_pred, 'y_pred_proba': val_proba},
+                'Test': {**test_metrics, 'y_pred': test_pred, 'y_pred_proba': test_proba}
             }
             
-            print(f"\n{name}:")
-            print(f"  Accuracy: {acc:.4f}")
-            print(f"  Precision: {prec:.4f}")
-            print(f"  Recall: {rec:.4f}")
-            print(f"  F1-Score: {f1:.4f}")
-            print(f"  ROC-AUC: {roc_auc:.4f}")
-            
+            # Print metrics
+            for set_name, metrics in [('Train', train_metrics), ('Val', val_metrics), ('Test', test_metrics)]:
+                print(f"{set_name:>10} -> Acc: {metrics['Accuracy']:.4f} | "
+                      f"Prec: {metrics['Precision']:.4f} | Rec: {metrics['Recall']:.4f} | "
+                      f"F1: {metrics['F1-Score']:.4f} | ROC-AUC: {metrics['ROC-AUC']:.4f}")
+        
     def save_models(self):
-        """Save trained models"""
-        print("\nSaving models...")
+        """Save trained models and scaler"""
+        print("\n" + "="*70)
+        print("SAVING MODELS AND SCALER")
+        print("="*70)
+        
         for name, model in self.models.items():
             filename = f'models/{name.lower().replace(" ", "_")}_model.pkl'
             with open(filename, 'wb') as f:
                 pickle.dump(model, f)
-            print(f"Saved: {filename}")
-            
+            print(f"✓ Saved: {filename}")
+        
+        # IMPROVED: Save scaler for production use
+        with open('models/scaler.pkl', 'wb') as f:
+            pickle.dump(self.scaler, f)
+        print(f"✓ Saved: models/scaler.pkl")
+        
     def save_results(self):
         """Save evaluation results"""
-        results_df = pd.DataFrame(self.results).T
-        results_df.to_csv('results/classification_metrics.csv')
-        print(f"Saved: results/classification_metrics.csv")
-        print(f"\nMetrics Summary:\n{results_df}")
+        print("\n" + "="*70)
+        print("SAVING RESULTS")
+        print("="*70)
+        
+        # Create results dataframe
+        results_summary = []
+        for model_name, sets in self.results.items():
+            for set_name, metrics in sets.items():
+                metrics_only = {k: v for k, v in metrics.items() if k not in ['y_pred', 'y_pred_proba']}
+                results_summary.append({
+                    'Model': model_name,
+                    'Dataset': set_name,
+                    **metrics_only
+                })
+        
+        results_df = pd.DataFrame(results_summary)
+        results_df.to_csv('results/classification_metrics.csv', index=False)
+        print(f"✓ Saved: results/classification_metrics.csv")
+        
+        print("\nMetrics Summary:")
+        print(results_df.to_string(index=False))
         
     def plot_confusion_matrices(self):
-        """Plot confusion matrices"""
+        """Plot confusion matrices for test set"""
         fig, axes = plt.subplots(2, 2, figsize=(12, 10))
         axes = axes.ravel()
         
-        for idx, (name, model) in enumerate(self.models.items()):
-            y_pred = self.results[name]['y_pred']
-            cm = confusion_matrix(self.y_test, y_pred)
-            sns.heatmap(cm, annot=True, fmt='d', ax=axes[idx], cmap='Blues')
-            axes[idx].set_title(f'{name}\nConfusion Matrix')
-            axes[idx].set_ylabel('True')
-            axes[idx].set_xlabel('Predicted')
-            
-        plt.tight_layout()
-        plt.savefig('visualizations/confusion_matrices.png', dpi=300, bbox_inches='tight')
-        print("Saved: visualizations/confusion_matrices.png")
-        plt.close()
-        
-    def plot_roc_curves(self):
-        """Plot ROC curves for all models"""
-        plt.figure(figsize=(10, 8))
-        
-        for name, model in self.models.items():
-            y_pred_proba = self.results[name]['y_pred_proba']
-            fpr, tpr, _ = roc_curve(self.y_test, y_pred_proba)
-            roc_auc = auc(fpr, tpr)
-            plt.plot(fpr, tpr, label=f'{name} (AUC = {roc_auc:.3f})')
-            
-        plt.plot([0, 1], [0, 1], 'k--', label='Random Classifier')
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title('ROC Curves - All Classification Models')
-        plt.legend(loc='lower right')
-        plt.grid(True, alpha=0.3)
-        plt.savefig('visualizations/roc_curves.png', dpi=300, bbox_inches='tight')
-        print("Saved: visualizations/roc_curves.png")
-        plt.close()
-        
-    def plot_feature_importance(self):
-        """Plot feature importance for tree-based models"""
-        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-        
-        # Random Forest
-        feature_names = self.X_train.columns
-        importances_rf = self.feature_importance_rf
-        idx_rf = np.argsort(importances_rf)[-10:]
-        axes[0].barh(range(len(idx_rf)), importances_rf[idx_rf])
-        axes[0].set_yticks(range(len(idx_rf)))
-        axes[0].set_yticklabels([feature_names[i] for i in idx_rf])
-        axes[0].set_title('Random Forest - Top 10 Features')
-        axes[0].set_xlabel('Importance')
-        
-        # XGBoost
-        importances_xgb = self.feature_importance_xgb
-        idx_xgb = np.argsort(importances_xgb)[-10:]
-        axes[1].barh(range(len(idx_xgb)), importances_xgb[idx_xgb])
-        axes[1].set_yticks(range(len(idx_xgb)))
-        axes[1].set_yticklabels([feature_names[i] for i in idx_xgb])
-        axes[1].set_title('XGBoost - Top 10 Features')
-        axes[1].set_xlabel('Importance')
-        
-        plt.tight_layout()
-        plt.savefig('visualizations/feature_importance.png', dpi=300, bbox_inches='tight')
-        print("Saved: visualizations/feature_importance.png")
-        plt.close()
-        
-    def run(self):
-        """Run full pipeline"""
-        print("="*50)
-        print("DAY 4: CLASSIFICATION MODELS")
-        print("="*50)
-        
-        self.load_data()
-        self.prepare_data()
-        self.train_logistic_regression()
-        self.train_random_forest()
-        self.train_xgboost()
-        self.train_svm()
-        self.evaluate_models()
-        self.save_models()
-        self.save_results()
-        self.plot_confusion_matrices()
-        self.plot_roc_curves()
-        self.plot_feature_importance()
-        
-        print("\n" + "="*50)
-        print("Classification models training completed!")
-        print("="*50)
-
-if __name__ == '__main__':
-    trainer = ClassificationModels()
-    trainer.run()
+        for idx, name in enumerate(self.models.keys()):
+            test_pred = self.results[name]['Test']['y_pred']
+            cm = confusion_matrix(self.y_test, test_pred)
+            sns.heatmap
