@@ -30,7 +30,7 @@ with tab2:
     col1, col2 = st.columns(2)
     with col1:
         price = st.slider('Price (Lakhs)', 10, 100, 50)
-         city = st.selectbox('City', ['Mumbai', 'Bangalore', 'Delhi', 'Hyderabad', 'Chennai'])
+     city = st.selectbox('City', ['Mumbai', 'Bangalore', 'Delhi', 'Hyderabad', 'Chennai'])
         
         bhk = st.selectbox('BHK', [1, 2, 3, 4, 5])
     with col2:
