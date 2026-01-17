@@ -11,6 +11,7 @@ import pickle
 from pathlib import Path
 from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score, GridSearchCV
 from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
@@ -33,12 +34,12 @@ Path('output').mkdir(exist_ok=True)
 class ClassificationModelsImproved:
     """Classification models trainer with proper train/val/test split and hyperparameter tuning"""
     
-    def __init__(self, data_path='output/data_engineered.csv', city=None):
+    def __init__(self, data_path='data/processed/india_housing_prices_engineered.csv', city=None):
         self.data_path = data_path
         self.models = {}
         self.results = {}
         self.scaler = StandardScaler()
-                self.city = city
+        self.city = city
         self.cv_results = {}
         
     def load_data(self):
@@ -61,7 +62,7 @@ class ClassificationModelsImproved:
         print("PREPARING DATA WITH TRAIN/VAL/TEST SPLIT")
         print("="*70)
 
-                # Filter by city if specified
+        # Filter by city if specified
         if self.city is not None:
             if 'City' in self.df.columns:
                 original_shape = self.df.shape[0]
@@ -78,7 +79,7 @@ class ClassificationModelsImproved:
         
         # Drop original categorical columns
         categorical_cols = ['State', 'City', 'Property_Type', 'Furnished_Status', 
-                          'Owner_Type', 'Availability_Status', 'Facing', 'Security']
+                          'Owner_Type', 'Availability_Status', 'Facing', 'Security', 'Locality', 'Amenities', 'Parking_Space']
         X = X.drop(columns=[col for col in categorical_cols if col in X.columns], errors='ignore')
         y = self.df['Good_Investment']
         
@@ -102,6 +103,13 @@ class ClassificationModelsImproved:
         print(f"{'Train':<15} {self.X_train.shape[0]:<15} {self.X_train.shape[0]/total*100:>6.1f}%")
         print(f"{'Validation':<15} {self.X_val.shape[0]:<15} {self.X_val.shape[0]/total*100:>6.1f}%")
         print(f"{'Test':<15} {self.X_test.shape[0]:<15} {self.X_test.shape[0]/total*100:>6.1f}%")
+        
+        # Impute missing values
+        self.imputer = SimpleImputer(strategy='median')
+        self.X_train = pd.DataFrame(self.imputer.fit_transform(self.X_train), columns=X.columns)
+        self.X_val = pd.DataFrame(self.imputer.transform(self.X_val), columns=X.columns)
+        self.X_test = pd.DataFrame(self.imputer.transform(self.X_test), columns=X.columns)
+        print(f"\n✓ Missing values imputed (median)")
         
         # Feature scaling (fit ONLY on training data to prevent leakage)
         self.X_train_scaled = self.scaler.fit_transform(self.X_train)
@@ -247,7 +255,7 @@ class ClassificationModelsImproved:
         self.models['Gradient Boosting'] = grid_search.best_estimator_
         print(f"Best params: {grid_search.best_params_}")
         print(f"Best CV ROC-AUC: {grid_search.best_score_:.4f}")
-def evaluate_on_set(self, model, X, y, set_name):
+    def evaluate_on_set(self, model, X, y, set_name):
         """Evaluate model on a specific dataset"""
         if hasattr(model, 'predict_proba'):
             y_pred = model.predict(X)
@@ -357,4 +365,40 @@ def evaluate_on_set(self, model, X, y, set_name):
         for idx, name in enumerate(self.models.keys()):
             test_pred = self.results[name]['Test']['y_pred']
             cm = confusion_matrix(self.y_test, test_pred)
-            sns.heatmap
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[idx])
+            axes[idx].set_title(f'{name} Confusion Matrix')
+            axes[idx].set_ylabel('Actual')
+            axes[idx].set_xlabel('Predicted')
+            
+        plt.tight_layout()
+        plt.savefig('visualizations/confusion_matrices_improved.png')
+        plt.close()
+        print("✓ Saved: visualizations/confusion_matrices_improved.png")
+
+if __name__ == "__main__":
+    try:
+        # Initialize and run
+        classifier = ClassificationModelsImproved()
+        classifier.load_data()
+        classifier.prepare_data()
+        
+        # Train models
+        classifier.train_logistic_regression()
+        classifier.train_random_forest()
+        classifier.train_xgboost()
+        classifier.train_svm()
+        # classifier.train_decision_tree() 
+        # classifier.train_gradient_boosting()
+        
+        # Evaluate and save
+        classifier.evaluate_models()
+        classifier.save_models()
+        classifier.save_results()
+        classifier.plot_confusion_matrices()
+        
+        print("\nAll classification tasks completed successfully!")
+        
+    except Exception as e:
+        print(f"\nError occurred: {str(e)}")
+        import traceback
+        traceback.print_exc()
