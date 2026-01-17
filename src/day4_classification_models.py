@@ -1,6 +1,7 @@
 """Day 4: Classification Models Training and Evaluation (IMPROVED)
 Build and evaluate multiple classification models with proper train/val/test split.
 Includes Logistic Regression, Random Forest, XGBoost, and SVM with hyperparameter tuning.
+NEW: Added Decision Tree and Gradient Boosting classifiers (both achieved 100% in reference project).
 """
 import numpy as np
 import pandas as pd
@@ -44,6 +45,13 @@ class ClassificationModelsImproved:
         print("Loading engineered data...")
         self.df = pd.read_csv(self.data_path)
         print(f"Data shape: {self.df.shape}")
+                
+        # IMPROVED: Optional data sampling for large datasets
+        if len(self.df) > 100000:
+            print(f"Large dataset detected ({len(self.df)} rows)")
+            print("Sampling 50,000 rows for training efficiency...")
+            self.df = self.df.sample(n=50000, random_state=42)
+            print(f"New data shape: {self.df.shape}")
         return self.df
     
     def prepare_data(self):
@@ -177,7 +185,56 @@ class ClassificationModelsImproved:
         print(f"Best params: {grid_search.best_params_}")
         print(f"Best CV ROC-AUC: {grid_search.best_score_:.4f}")
         
-    def evaluate_on_set(self, model, X, y, set_name):
+    
+    
+        def train_decision_tree(self):
+        """Train Decision Tree (achieved 100% in reference project)"""
+        print("\n" + "="*70)
+        print("TRAINING DECISION TREE")
+        print("="*70)
+        
+        from sklearn.tree import DecisionTreeClassifier
+        
+        param_grid = {
+            'max_depth': [8, 10, 12, 15],
+            'min_samples_split': [5, 10, 20],
+            'min_samples_leaf': [2, 4, 8]
+        }
+        
+        base_model = DecisionTreeClassifier(random_state=42, class_weight='balanced')
+        grid_search = GridSearchCV(base_model, param_grid, cv=5, scoring='roc_auc', n_jobs=-1)
+        
+        print(f"GridSearchCV with {len(param_grid['max_depth']) * len(param_grid['min_samples_split']) * len(param_grid['min_samples_leaf'])} combinations...")
+        grid_search.fit(self.X_train, self.y_train)
+        
+        self.models['Decision Tree'] = grid_search.best_estimator_
+        print(f"Best params: {grid_search.best_params_}")
+        print(f"Best CV ROC-AUC: {grid_search.best_score_:.4f}")
+    
+    def train_gradient_boosting(self):
+        """Train Gradient Boosting (achieved 100% in reference project)"""
+        print("\n" + "="*70)
+        print("TRAINING GRADIENT BOOSTING")
+        print("="*70)
+        
+        from sklearn.ensemble import GradientBoostingClassifier
+        
+        param_grid = {
+            'n_estimators': [50, 100, 150],
+            'learning_rate': [0.05, 0.1, 0.2],
+            'max_depth': [3, 5, 7]
+        }
+        
+        base_model = GradientBoostingClassifier(random_state=42)
+        grid_search = GridSearchCV(base_model, param_grid, cv=5, scoring='roc_auc', n_jobs=-1)
+        
+        print(f"GridSearchCV with {len(param_grid['n_estimators']) * len(param_grid['learning_rate']) * len(param_grid['max_depth'])} combinations...")
+        grid_search.fit(self.X_train, self.y_train)
+        
+        self.models['Gradient Boosting'] = grid_search.best_estimator_
+        print(f"Best params: {grid_search.best_params_}")
+        print(f"Best CV ROC-AUC: {grid_search.best_score_:.4f}")
+def evaluate_on_set(self, model, X, y, set_name):
         """Evaluate model on a specific dataset"""
         if hasattr(model, 'predict_proba'):
             y_pred = model.predict(X)
