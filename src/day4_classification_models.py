@@ -165,7 +165,7 @@ class ClassificationModelsImproved:
         print(f"Best CV ROC-AUC: {grid_search.best_score_:.4f}")
         
     def train_svm(self):
-        """Train SVM with hyperparameter tuning"""
+        '''Train SVM with hyperparameter tuning'''
         print("\n" + "="*70)
         print("TRAINING SUPPORT VECTOR MACHINE")
         print("="*70)
