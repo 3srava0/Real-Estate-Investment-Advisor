@@ -33,11 +33,12 @@ Path('output').mkdir(exist_ok=True)
 class ClassificationModelsImproved:
     """Classification models trainer with proper train/val/test split and hyperparameter tuning"""
     
-    def __init__(self, data_path='output/data_engineered.csv'):
+    def __init__(self, data_path='output/data_engineered.csv', city=None):
         self.data_path = data_path
         self.models = {}
         self.results = {}
         self.scaler = StandardScaler()
+                self.city = city
         self.cv_results = {}
         
     def load_data(self):
@@ -59,6 +60,18 @@ class ClassificationModelsImproved:
         print("\n" + "="*70)
         print("PREPARING DATA WITH TRAIN/VAL/TEST SPLIT")
         print("="*70)
+
+                # Filter by city if specified
+        if self.city is not None:
+            if 'City' in self.df.columns:
+                original_shape = self.df.shape[0]
+                self.df = self.df[self.df['City'] == self.city]
+                print(f"Filtered data for city: {self.city}")
+                print(f"Rows after city filter: {self.df.shape[0]} (from {original_shape})")
+                if len(self.df) == 0:
+                    raise ValueError(f"No data found for city: {self.city}")
+            else:
+                print("Warning: 'City' column not found in data. Skipping city filter.")
         
         # Separate features and target
         X = self.df.drop(['Good_Investment', 'Future_Price_5Y'], axis=1, errors='ignore')
@@ -187,8 +200,8 @@ class ClassificationModelsImproved:
         
     
     
-        def train_decision_tree(self):
-                """Train Decision Tree (achieved 100% in reference project)"""
+    def train_decision_tree(self):
+        """Train Decision Tree (achieved 100% in reference project)"""
         print("\n" + "="*70)
         print("TRAINING DECISION TREE")
         print("="*70)
