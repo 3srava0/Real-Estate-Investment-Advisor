@@ -26,9 +26,18 @@ class FeatureEngineer:
     # Convert to numeric, handling any non-numeric values
         self.df['Nearby_Schools'] = pd.to_numeric(self.df['Nearby_Schools'], errors='coerce').fillna(0)
         self.df['Nearby_Hospitals'] = pd.to_numeric(self.df['Nearby_Hospitals'], errors='coerce').fillna(0)
-        self.df['Public_Transport_Accessibility'] = pd.to_numeric(self.df['Public_Transport_Accessibility'], errors='coerce').fillna(0)
+
+        # Map categorical accessibility to numeric
+        accessibility_map = {'Low': 1, 'Medium': 2, 'High': 3}
+        self.df['Public_Transport_Accessibility'] = self.df['Public_Transport_Accessibility'].map(accessibility_map).fillna(0)
+
+        # Map binary Parking_Space to numeric
+        if 'Parking_Space' in self.df.columns:
+            self.df['Parking_Space'] = self.df['Parking_Space'].map({'No': 0, 'Yes': 1}).fillna(0)
     
     # Price per square foot
+        self.df['Price_in_Lakhs'] = pd.to_numeric(self.df['Price_in_Lakhs'], errors='coerce')
+        self.df['Size_in_SqFt'] = pd.to_numeric(self.df['Size_in_SqFt'], errors='coerce')
         self.df['Price_per_SqFt'] = self.df['Price_in_Lakhs'] / (self.df['Size_in_SqFt'] + 1)
         logger.info("  ✓ Price_per_SqFt created")
     
@@ -64,7 +73,7 @@ class FeatureEngineer:
         
         # Luxury apartment indicator
         self.df['Is_Luxury'] = (
-            (self.df['Furnished_Status'] == 'Fully') & 
+            (self.df['Furnished_Status'] == 'Furnished') &
             (self.df['BHK'] >= 3) &
             (self.df['Amenities_Count'] > 0)
         ).astype(int)
@@ -84,8 +93,7 @@ class FeatureEngineer:
         
         # Secure property indicator
         self.df['Is_Secure'] = (
-            self.df['Security'].notna() & 
-            (self.df['Security'] != 'None')
+            self.df['Security'] == 'Yes'
         ).astype(int)
         logger.info("  ✓ Is_Secure created")
     
